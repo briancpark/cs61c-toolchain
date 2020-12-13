@@ -269,7 +269,8 @@ Drain, Gate, Source
     * clk-to-q: how long it takes for output to change
     * maximum clock frequency
         * `Frequency = 1 / period`
-        * `Max Delay = CLK-to-Q Delay + CL Delay + Setup Time`
+        * `Max Delay = CLK-to-Q Delay + longest CL Delay + Setup Time`
+        * `hold time <= CLK-to-Q Delay + shortest CL Delay`
     * Add registers to speed up, because you get less delays. We will see why this is the case when we pipeling our RISC-V datapath!
 * Finite State Machine (FSM)
     * state transition diagram
@@ -322,7 +323,7 @@ Doing well on the CPU design project probably means we are very familiar with th
 
 ## Module 7 - Caches
 
-![cache](https://lh3.googleusercontent.com/proxy/uAZ4DjFTVZINqwJEA5jfv9g96foWR_Je_ANO8lMet4ileir6_pOXNdDiEZ9IvPe3wQdzDZEfOT91onZpJVNmMlq00m1yIApBL3Kt7D1JsOnPmZ0g2jreojJlQOdLKmbZi8SYovfAQTGyX8hV8IUTcHFt1gewak5YnVHdiJTpkJ5VrQxkZB9nZc9Y-1Y6iji-)
+![cache](https://lh3.googleusercontent.com/proxy/3X9IDemhwHWTQJDDHM6yhBzu6DUAFphGO6GIqZiDcMiZS4vm6M7-idguwrDKdR_5sWdf-4ID1w3RAlM-aFGlOxibqnXPOcNI8YPbmZPhVV-DLpppyQCSbFE16JPoWFh6FMFcYvzORj6n46ITg9eZEgePfgb77Ppy9knNAm0S03g6Vk1sPRB9Rq3AaoH23ty9)
 
 | Name | Abbreviation | Size |
 |:----:|:------------:|:----:|
@@ -340,28 +341,140 @@ Doing well on the CPU design project probably means we are very familiar with th
 
 ### Direct Mapped Cache
 
+| tag | index | offset |
+|:---:|:----:|:-----:|
+| tttttttttttttt | iiiiiiiiii | oooo |
+* tag: to check that we have the correct block
+* index: to select block
+* offset: offset within the block
+* Area = Height (# of blocks) * Width (size of one block)
+* Each memory address is associated with one possible block within the cache
+* Block is the unit of transfer between cache and memory
+* Cache terminology
+    * cache hit
+    * cache miss: fetch from memory
+    * cache miss, block replacement: wrong data is in the appropriace block, so fetch data from memory
+* Cache metrics
+    * Hit rate: fraction that hits caches
+    * Miss rate: 1 - hit rate
+    * Miss penalty: time ot replace a block from lower level of memory heirarchy to cache
+    * Hit time: Time to access cache memory (includes tag comparison) **DON'T MIX THIS UP WITH HIT RATE!!!**
+* We often need a valid bit to determine if we hit or miss
+* Write hits
+    * write-through
+        * Update both cache and memory
+    * write-back
+        * update word in cache block
+        * allow memory word to be "stale"
+        * add "dirty" bit to block
+            * denotes that memory and cache is inconsistent
+            * needs to be updated when block is replaced
+* Block size tradeoffs, there is often sweet spot
+* Cache Misses (3 C's)
+    * Compulsory Miss
+        * occurs when program is first started
+        * Cache doesn't have the memory yet, so it has to be loaded, thus a **miss is bound to happen!**
+        * Can't be avoided easily
+        * Every block of memory will have one compulsory miss! (This is not a block of cache)
+    * Conflict Miss
+        * Miss that occurs because two distinct memory addresses map to the same cache location
+        * a problem in direct mapped caches
+    * Capacity Misses
+        * Miss that occurs because cache has limited size
+        * *The primary type of miss for fully associative caches!*
+
 ### Fully Associative Cache
+* Same as direct, but no index
+* No conflict misses
+* Drawback is that we need more hardware
 
 ### Set Associative Cache
+* Same as direct, but index is now pointing to the correct row (set)
+* Each set contains multiple blocks
+* Once a set is found, must compare all the tags in the set
+* Size of cache is sets * (N blocks / set) * block size
+* Idea goes into N-way Set Associative Cache
+* Avoids conflict misses
+
+### Conclusion
+* We want to minimize AMAT (Average Memory Access Time)
+    * AMAT = Hit time + Miss penalty * Miss rate
 
 ## Module 8 - Virtual Memory
 
 ![VM](https://www.enterprisestorageforum.com/imagesvr_ce/6466/VirtualMemory.png)
 
+* Provides illusion that we have very large memory
+* Allows OS to share memory, as well as protecting programs with each other
+* Virtual Address
+    * Consists of page number and offset
+* Physical Address
+    * Page number and offset
+        * offset is the same number of bits virtual address bits
+        * page number is often larger/smaller than the virtual address
+* Page table
+    * Physical memory (DRAM) is often broken up into pages
+    * In caches, we work with blocks, in VM, we work with pages
+    * Page fault happens when the page is not readily accessible on DRAM and a page has to be loaded from disk or be initialized
+    * If page needs to be swapped from disk, perform a context switch
+* If nothing still makes sense, remember that DRAM acts like a cache to the disk
+* Parsing Page Tables
+    * VPN (Virtual Page Number)
+    * PPN (Physical Page Number)
+    * offset - The same across VPN and PPN
+* Translation Lookaside Buffers (TLB)
+    * Translating virtual to physical is often expensive, so use a cache (fully associative)!
+    * Now the TLB gets hit first with memory access directly from the CPU!
+
+![TLB](https://upload.wikimedia.org/wikipedia/commons/6/6e/Translation_Lookaside_Buffer.png)
+
+* Performance metrics
+    * Nearly the same for cache when calculation AMAT
+
 ## Module 9 - Flynn's Taxonomy
 
 ![simd](https://software.intel.com/content/dam/develop/external/us/en/images/37207-183287.gif)
+
+* SISD (Single Instruction Single Data)
+    * Our 61CPU project. Common in older hardware
+* SIMD (Single Instruction Multiple Data)
+    * Intel AVX instructions that have wider registers. Of course, it is dependent on the hardware and whether it supports it or not
+* MIMD (Multiple Instruction Multiple Data)
+    * `pragma omp parallel for`
+    * Warehouse scale computing (WSC)
+* MISD (Multiple Instruction Single Data)
+    * Not common
 
 ## Module 9 - Thread Level Parallelism
 
 ![threads](https://cdn.wccftech.com/wp-content/uploads/2020/11/Intel-AMD-CPU-Vs-Apple-M1-Feature.jpg)
 
+* Threads stand for a thread of execution
+* We often have multiple threads running (software and hardware threads)
+* Program can split or fork itself into multiple threads
+
+* Things to be aware of in OpenMP
+    * `pragama omp parallel {}` executes a block of codes multiple times per threads
+    * Main thread **forks** into parallel threads (Some people also call it master thread)
+    * Implement locks when we are accessing shared memory, so be wary of what variables are written into when executing parallel threads
+    * Race conditions
+        * When reads and writes occur to shared memory, thus having unexpected or incorrect results (e.g. writing to multiple parts of the array at the same time)
+        * Usually resolved with a `pragma omp critical`
+        * Deadlock: When no progress is possible
 ## Module 10 - Map Reduce Spark
 
 ![spark](https://upload.wikimedia.org/wikipedia/commons/f/f3/Apache_Spark_logo.svg)
 
-## Module 11 - Conclusion
-
+* Amdahl's Heart Breaking Law
+    * <img src="https://latex.codecogs.com/gif.latex?%5Cfrac%7B1%7D%7Bs%20&plus;%20%5Cfrac%7B%281%20-%20s%29%7D%7Bp%7D%7D%20%5Cleq%20%5Cfrac%7B1%7D%7Bs%7D">
+    * As p grows to infinity, s is non-sped up, 1 - s is sped up
+* Data Level Parallelism
+    * MapReduce uses servers and disks
+        * Hadoop
+        * Cost efficient (Can use cheaper hardware!)
+        * File based
+    * Spark uses memory (arguably faster)
+        * Lazy evaluation
 
 Sources: Notes and study guide compiled from notes, lectures, and discussions publicly availiable.
 
